@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import next from 'next';
 
 /**
  * Event Document Interface
@@ -11,18 +12,14 @@ export interface IEvent extends Document {
   image: string;
   overview: string;
   date: Date;
-  time: {
-    from: string; // HH:MM format
-    to: string;   // HH:MM format
-  };
+  startingTime: string; // HH:MM format
+  endingTime: string;   // HH:MM format
   venue: string;
   mode: 'online' | 'in-person' | 'hybrid';
   about: string;
-  audience: mongoose.Types.ObjectId[]; // 1-M relationship with Audience
-  agenda: mongoose.Types.ObjectId[];   // 1-M relationship with Agenda
+  audience?: mongoose.Types.ObjectId[]; // 1-M relationship with Audience
+  agenda?: mongoose.Types.ObjectId[];   // 1-M relationship with Agenda
   status: 'draft' | 'published' | 'archived' | 'cancelled';
-  created_at: Date;
-  updated_at: Date;
 }
 
 /**
@@ -31,22 +28,18 @@ export interface IEvent extends Document {
  */
 const EventSchema = new Schema<IEvent>(
   {
-    slug: {
-      type: String,
-      required: [true, 'Event slug is required'],
-      unique: true,
-      lowercase: true,
-      trim: true,
-      match: [/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens'],
-      minlength: [3, 'Slug must be at least 3 characters long'],
-      maxlength: [100, 'Slug cannot exceed 100 characters'],
-    },
     title: {
       type: String,
       required: [true, 'Event title is required'],
       trim: true,
       minlength: [3, 'Title must be at least 3 characters long'],
       maxlength: [200, 'Title cannot exceed 200 characters'],
+    },
+    slug: {
+      type: String,
+      unique: true,
+      lowercase: true,
+      trim: true,
     },
     hook: {
       type: String,
@@ -74,17 +67,15 @@ const EventSchema = new Schema<IEvent>(
         message: 'Event date must be in the future',
       },
     },
-    time: {
-      from: {
-        type: String,
-        required: [true, 'Event start time is required'],
-        match: [/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format. Use HH:MM'],
-      },
-      to: {
-        type: String,
-        required: [true, 'Event end time is required'],
-        match: [/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format. Use HH:MM'],
-      },
+    startingTime: {
+      type: String,
+      required: [true, 'Event start time is required'],
+      match: [/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format. Use HH:MM'],
+    },
+    endingTime: {
+      type: String,
+      required: [true, 'Event end time is required'],
+      match: [/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format. Use HH:MM'],
     },
     venue: {
       type: String,
@@ -149,12 +140,21 @@ EventSchema.index({ date: 1 });
 EventSchema.index({ status: 1 });
 EventSchema.index({ created_at: -1 });
 
-// Middleware to update the updated_at timestamp on save
-EventSchema.pre('save', function (this: IEvent) {
-  if (!this.isNew) {
-    this.updated_at = new Date();
+EventSchema.pre('validate', function (this: IEvent) {
+  if (!this.slug && this.title) {
+    this.slug = generateSlug(this.title);
   }
 });
+
+function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
+    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+}
 
 /**
  * Event Model
